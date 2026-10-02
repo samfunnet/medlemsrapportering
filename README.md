@@ -1,6 +1,3 @@
-### `README.md`
-
-```markdown
 # Medlemsrapportering – Mikaelkirken
 
 Automatiseringsverktøy for årlig medlemsrapportering og kontroll mot Statsforvalteren. Prosjektet er bygget i Python med **Polars** og administreres med **uv**.
@@ -10,9 +7,11 @@ Automatiseringsverktøy for årlig medlemsrapportering og kontroll mot Statsforv
 ## 📋 Forutsetninger
 
 1. **Linux** med [uv](https://docs.astral.sh/uv/) installert:
+
    ```bash
    curl -LsSf https://astral.sh/uv/install.sh | sh
    ```
+
 1. Tilgang til servermountet spesifisert i `config.json` (f.eks. `/mnt/server/...`).
 
 Ingen manuell opprettelse av virtuelt miljø (`venv`) eller `pip install` er nødvendig. `uv` håndterer alle avhengigheter automatisk.
