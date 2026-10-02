@@ -1,0 +1,17 @@
+[project]
+name = "medlemsrapportering"
+version = "0.1.0"
+description = "Medlemsrapportering og etterarbeid"
+readme = "README.md"
+authors = [
+    { name = "Craftsman Digital", email = "htcjon@gmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "fastexcel",
+    "polars",
+    "xlsxwriter",
+]
+
+[tool.uv]
+package = false
