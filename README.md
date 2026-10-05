@@ -1,26 +1,105 @@
-# Medlemsrapportering – Mikaelkirken
+ Medlemsrapportering og etterarbeid
 
-Automatiseringsverktøy for årlig medlemsrapportering og kontroll mot Statsforvalteren. Prosjektet er bygget i Python med **Polars** og administreres med **uv**.
+Dette prosjektet håndterer datainnlesing, vasking, berikelse og analyse av menighetsdata og feillister fra Statsforvalteren for Mikaelkirken.
 
----
-
-## 📋 Forutsetninger
-
-1. **Linux** med [uv](https://docs.astral.sh/uv/) installert:
-
-   ```bash
-   curl -LsSf https://astral.sh/uv/install.sh | sh
-   ```
-
-1. Tilgang til servermountet spesifisert i `config.json` (f.eks. `/mnt/server/...`).
-
-Ingen manuell opprettelse av virtuelt miljø (`venv`) eller `pip install` er nødvendig. `uv` håndterer alle avhengigheter automatisk.
+Systemet er bygget med **Polars 2.0** for høy ytelse og robust databehandling på tvers av menigheter og årganger.
 
 ---
 
-## ⚙️ Konfigurasjon (`config.json`)
+## Prosjektstruktur
 
-Skriptene styres av `config.json` i rotmappen. Her defineres filbanene, der `{ar}` automatisk erstattes med året du sender inn via terminalen:
+```text
+medlemsrapportering/
+├── config.json                        # Sentral sti- og filkonfigurasjon
+├── pyproject.toml                     # Prosjektoppsett og avhengigheter (uv)
+├── medlemsrapportering_data.py        # 📦 Kjernemotor (felles funksjon for datainnlesing)
+├── medlemsrapportering-feil.py         # 🚀 Kjøring 1: Eksporterer feilliste for et gitt år
+└── medlemsrapportering-til-statistikk.py # 🚀 Kjøring 2: Eksporterer totalt datagrunnlag
+```
+
+---
+
+## Kjernefunksjonen: `lag_medlemsrapportering_data()`
+
+Begge kjøringene benytter den delte motoren `lag_medlemsrapportering_data(ar=None)` i `medlemsrapportering_data.py`. Funksjonen fungerer som et felles fundament og utfører følgende oppgaver:
+
+1. **Dynamisk år-deteksjon:**
+   - Kalles den med et årstall (f.eks. `2025`), behandles kun dette året.
+   - Kalles den uten parameter (`None`), skannes `grunnkatalog` automatisk etter alle mapper som følger mønsteret `Grunndata <ÅR>` (f.eks. 2020–2025).
+2. **Robust fil- og menighetshåndtering:**
+   - Leser menighetsfiler uavhengig av store/små bokstaver i filnavn (f.eks. `Oslo.xlsx`, `oslo.xlsx`).
+   - Filtrerer strengt på de fem godkjente menighetene: **Bergen**, **Hamar**, **Oslo**, **Stavanger** og **Trondheim**.
+3. **Datavask og typesikkerhet:**
+   - Tvinger alle innleste kolonner til `String` umiddelbart for å unngå typekonflikter ved sammenslåing.
+   - Standardiserer `Fødselsnummer` (11 siffer med ledende nuller) og `Postnummer` (4 siffer).
+4. **Berikelse via `utilities`:**
+   - Benytter `utilities.fnr_detaljer` for å beregne eksakt **`fodsels_dato`** (håndterer D-numre og århundreskifter 1800/1900/2000) og **`kjønn`** (Mann/Kvinne fra 9. siffer).
+5. **Kobling mot Statsforvalterens feillister (LEFT JOIN):**
+   - Kobler menighetsdataene mot `ugyldige <ar>.xlsx` på `["år", "Fødselsnummer"]`.
+   - Dersom en feilliste mangler for et år (f.eks. før listen er mottatt fra Statsforvalteren), får medlemmene automatisk blanke felter i `Status` og `Tilleggsinfo`.
+6. **Strukturert kolonneoppsett:**
+   - `år` legges som **første kolonne** som `Int32`, etterfulgt av `Menighet`, eventuelle feilkolonner og vaskede persondata.
+
+---
+
+## Kjøringer (Bruk)
+
+### 1. Generere feilliste (`medlemsrapportering-feil.py`)
+
+Brukes når Statsforvalterens feilliste for et spesifikt år er mottatt og du kun vil sitte igjen med medlemmene som har avvik/feil.
+
+- **Oppgave:** Henter data for det oppgitte året, fjerner alle godkjente medlemmer, og beholder kun rader der `Status` eller `Tilleggsinfo` inneholder en verdi.
+- **Kjøring:**
+
+  ```bash
+  uv run medlemsrapportering-feil.py <ÅR>
+  ```
+
+  *Eksempel:*
+
+  ```bash
+  uv run medlemsrapportering-feil.py 2025
+  ```
+- **Resultat:** Lagres i mappen for feil definert i `config.json`:
+
+  ```text
+  <grunnkatalog>/Medlems statistikk/Feil/ugyldige_komplett_liste <ÅR>.xlsx
+  ```
+- Viser en oppsummering i terminalen over antall feil fordelt per menighet.
+
+---
+
+### 2. Generere fullstendig datagrunnlag (`medlemsrapportering-til-statistikk.py`)
+
+Brukes for å eksportere det komplette medlemsgrunnlaget med utledet fødselsdato, kjønn og eventuelle feilmeldinger til én samlet Excel-fil.
+
+#### Kjøring for alle år (anbefalt for totalstatistikk)
+
+Dersom du utelater årstall, finner skriptet alle år som eksisterer i mappestrukturen og slår dem sammen i én fil:
+
+```bash
+uv run medlemsrapportering-til-statistikk.py
+```
+
+#### Kjøring for et enkeltår
+
+Dersom du kun ønsker data for et spesifikt år:
+
+```bash
+uv run medlemsrapportering-til-statistikk.py 2025
+```
+
+- **Resultat:** Lagres direkte i grunnkatalogen:
+
+  ```text
+  <grunnkatalog>/til-medlems-statistikk.xlsx
+  ```
+
+---
+
+## Konfigurasjon (`config.json`)
+
+Stier og filnavnmønstre styres fra `config.json` i rotkatalogen:
 
 ```json
 {
@@ -34,78 +113,21 @@ Skriptene styres av `config.json` i rotmappen. Her defineres filbanene, der `{ar
 
 ---
 
-## 🚀 Hovedrutine: Etterarbeid (`medlemsrapportering-etterarbeid.py`)
+## Forutsetninger og installasjon
 
-Dette skriptet kjøres **etter** at Statsforvalteren har behandlet medlemslisten og returnert filen over ugyldige medlemmer (f.eks. `ugyldige 2025.xlsx`).
+Prosjektet administreres med [uv](https://github.com/astral-sh/uv).
 
-### Hva skriptet gjør
+1. Klon repoet:
 
-1. **Leser alle menighetsfiler** i mappen `Grunndata {ar}` (Trondheim, Bergen, Stavanger, Hamar, Oslo, osv.).
-2. **Standardiserer kolonner etter fast posisjon:** Kolonnenavnene i menighetenes Excel-filer kan variere, men skriptet tvinger alltid de 7 første kolonnene til:
-   * `[0] Medlemsnummer`, `[1] Etternavn`, `[2] Fornavn`, `[3] Adresse`, `[4] Postnummer`, `[5] Poststed`, `[6] Fødselsnummer`
-3. **Vasker data automatisk:**
-   * **Fødselsnummer:** Fylles ut til 11 siffer med ledende nuller (zfill) dersom Excel har lagret det numerisk.
-   * **Postnummer:** Sikres til 4 siffer (slik at f.eks. `0955` Oslo ikke blir til `955`).
-4. **Legger til menighet:** Navnet på menigheten hentes automatisk fra filnavnet (f.eks. `Trondheim.xlsx` → `Trondheim`).
-5. **Kjører ren INNER JOIN:** Matcher menighetsdataene mot Statsforvalterens feilliste på `Fødselsnummer`. Kun rader med feil beholdes.
-6. **Eksporterer beriket feilliste:** Lagrer en ny Excel-fil der `Menighet`, `Status` og `Tilleggsinfo` er plassert først.
+   ```bash
+   git clone https://github.com/samfunnet/medlemsrapportering.git
+   cd medlemsrapportering
+   ```
 
----
+2. Installer avhengigheter (inkludert utilities-biblioteket):
 
-### Slik kjører du skriptet
+   ```bash
+   uv sync
+   ```
 
-Åpne terminalen i rotmappen til repoet og kjør:
-
-```bash
-uv run medlemsrapportering-etterarbeid.py <ÅR>
-```
-
-#### Eksempel
-
-```bash
-uv run medlemsrapportering-etterarbeid.py 2025
-```
-
-#### Forventet terminalutdata
-
-```text
-Laster inn 5 menigheter fra: Grunndata 2025 ...
-Totalt 1450 medlemmer innlest fra menighetene.
-Leser ugyldige fra: ugyldige 2025.xlsx ...
-
-✅ FERDIG: Lagret 38 feil til:
-   /mnt/.../Medlems statistikk/Feil/ugyldige_komplett_liste 2025.xlsx
-
-Feil fordelt per menighet:
-shape: (5, 2)
-┌───────────┬───────┐
-│ Menighet  ┆ count │
-│ ---       ┆ ---   │
-│ str       ┆ u32   │
-╞═══════════╪═══════╡
-│ Oslo      ┆ 18    │
-│ Trondheim ┆ 9     │
-│ Bergen    ┆ 6     │
-│ Stavanger ┆ 3     │
-│ Hamar     ┆ 2     │
-└───────────┴───────┘
-```
-
-Resultatfilen `ugyldige_komplett_liste 2025.xlsx` er nå klar til å distribueres til menighetene eller saksbehandles videre.
-
----
-
-## 🔮 Kommende funksjoner og skript
-
-Flere rutiner legges til etter hvert:
-
-* **`medlemsrapportering-statsforvalteren.py`**:
-  Rutine som kjøres *før* innsending. Den leser alle menighetenes grunndatafiler, sjekker for eventuelle duplikater mellom menighetene, og genererer den samlede Excel-filen som skal rapporteres til Statsforvalteren.
-
----
-
-## 🔒 Personvern og GDPR
-
-* Prosjektet behandler medlemslister og fødselsnumre (særlige kategorier av personopplysninger etter GDPR art. 9).
-* `.gitignore` er konfigurert slik at **ingen Excel-filer (`*.xlsx`) skal commites til Git**.
-* Alle data skal til enhver tid leses fra og skrives til de sikrede serverkatalogene spesifisert i `config.json`.
+   *(Eller manuelt: `uv add git+https://github.com/samfunnet/utilities`)*
