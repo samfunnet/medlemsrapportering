@@ -1,4 +1,4 @@
- Medlemsrapportering og etterarbeid
+# Medlemsrapportering og etterarbeid
 
 Dette prosjektet håndterer datainnlesing, vasking, berikelse og analyse av menighetsdata og feillister fra Statsforvalteren for Mikaelkirken.
 
@@ -60,11 +60,13 @@ Brukes når Statsforvalterens feilliste for et spesifikt år er mottatt og du ku
   ```bash
   uv run medlemsrapportering-feil.py 2025
   ```
+
 - **Resultat:** Lagres i mappen for feil definert i `config.json`:
 
   ```text
   <grunnkatalog>/Medlems statistikk/Feil/ugyldige_komplett_liste <ÅR>.xlsx
   ```
+
 - Viser en oppsummering i terminalen over antall feil fordelt per menighet.
 
 ---
